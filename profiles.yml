@@ -1,0 +1,8 @@
+homebot_profile:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: network.db
+      extensions:
+        - httpfs

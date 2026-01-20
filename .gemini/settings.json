@@ -1,5 +1,17 @@
 {
     "general": {
         "previewFeatures": true
+    },
+
+    "mcpServers": {
+    "duckdb": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-duckdb",
+        "--db",
+        "/home/gnet/iot/network.db"
+      ]
     }
+  }
 }

@@ -1,0 +1,8 @@
+Flask
+urllib3
+requests
+duckdb
+pandas
+datetime
+pyarrow
+dbt-duckdb
