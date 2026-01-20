@@ -13,8 +13,13 @@ app = Flask(__name__)
 # Constants
 DB_NAME = "network.db"
 PARQUET_DIR = "data"
+
 # Initialize MikroTik service
-mt_service = MikroTikService("10.10.100.1", "homebot", "homebot!2025!")
+MIKROTIK_HOST = os.getenv("MIKROTIK_HOST", "10.10.100.1")
+MIKROTIK_USER = os.getenv("MIKROTIK_USER", "homebot")
+MIKROTIK_PASSWORD = os.getenv("MIKROTIK_PASSWORD", "homebot!2025!")
+
+mt_service = MikroTikService(MIKROTIK_HOST, MIKROTIK_USER, MIKROTIK_PASSWORD)
 
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

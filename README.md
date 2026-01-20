@@ -1,184 +1,90 @@
-## High level diagram (data source segmentation)
+# IoT Home Automation & Analytics Platform
 
-### - network infrastructure with entry level information (i.e. internet connection, ip addresse, device name, etc)
-### - IoT devices provide power control information, user activities, energy consumption and user real time events
-### - Security device provides foto/video content, AI models metadata (human and vichle activities detection events, initial recognition of objects, and real time metadata)
-### - Smart home/office datacenter provice journals and metrics data.
+A comprehensive system for monitoring, managing, and analyzing a smart home/office network. This project integrates network infrastructure data (Mikrotik), IoT device telemetry (Shelly), and security feeds (HikVision) into a unified data pipeline for analytics and automation.
 
+## Project Structure
 
-
-```mermaid
----
-config:
-  theme: base
-  themeVariables:
-    fontSize: 24px
-  layout: dagre
-  look: handDrawn
----
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '22px'}}}%%
-flowchart TB
- subgraph subGraph2["Wireless Access"]
-        AP1["WiFi AP1<br>hAP ax^2"]
-        AP2["WiFi AP2<br>L22UGS-5HaxD2HaxD"]
-  end
- subgraph subGraph3["Kubernetes Cluster (k3s)"]
-        Master["Master Node<br>Intel Core i7 16Gb"]
-  end
- subgraph subGraph4["Internal Network"]
-        FW["Main Firewall<br>Mikrotik RB4011"]
-        SW["Cloud Switch<br>Mikrotik 610-8P-2S+OUT"]
-        subGraph2
-        subGraph3
-  end
- subgraph s1["Security"]
-        n1["Camera 1<br>HikVision DS-2CD1043G2"]
-        n2["Camera 2<br>HikVision DS-2CD1043G2"]
-        Lock["Door Lock"]
-  end
- subgraph s3["IoT Power & Control"]
-        n6["Shelly Pro 4PM"]
-        n7["Shelly Pro 2PM"]
-        n8["Shelly Devices<br>Uni, Switch25, Plug, Vintage, Bulb, 1PM"]
-        n9["Sensors<br>Temp, Humidity, Motion"]
-  end
-    FW --> SW
-    SW --> Master
-
-    AP1@{ shape: rect}
-    AP2@{ shape: rect}
-    Master@{ shape: rect}
-    FW@{ shape: rect}
-    SW@{ shape: rect}
-    subGraph2@{ shape: rect}
-    subGraph3@{ shape: rect}
-    n1@{ shape: rect}
-    n2@{ shape: rect}
-    Lock@{ shape: rect}
-    n6@{ shape: rect}
-    n7@{ shape: rect}
-    n8@{ shape: rect}
-    n9@{ shape: rect}
-    subGraph4@{ shape: rect}
-    s3@{ shape: rect}
-    s1@{ shape: rect}
-     AP1:::network
-     AP2:::network
-     Master:::server
-     FW:::network
-     SW:::network
-     n1:::device
-     n2:::device
-     Lock:::device
-     n6:::device
-     n7:::device
-     n8:::device
-     n9:::device
-    classDef network fill:#f9f,stroke:#333,stroke-width:2px
-    classDef device fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
-    classDef power fill:#fff9c4,stroke:#fbc02d,stroke-width:2px
-    classDef server fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
+```text
+/home/gnet/iot/
+├───.dockerignore          # Files excluded from Docker builds
+├───.env                   # Local secrets (ignored by git)
+├───.env_example           # Template for environment variables
+├───.gitignore             # Git ignore rules
+├───dbt_project.yml        # DBT project configuration
+├───profiles.yml           # DBT connection profiles
+├───debug_db.py            # Utility script for debugging DuckDB
+├───homebot/               # Main Application Source Code
+│   ├───app.py             # Flask API & Data Ingestion Logic
+│   ├───requirements.txt   # Python dependencies
+│   ├───models/            # DBT SQL Models (Data Transformations)
+│   │   ├───int_shelly_metrics.sql
+│   │   ├───inventory.sql
+│   │   └───sources.yml
+│   ├───seeds/             # Static CSV Data (e.g., Device Metadata)
+│   │   └───device_metadata.csv
+│   └───services/          # Integration Modules
+│       └───mikrotik.py    # Mikrotik API Client
+├───data/                  # Local storage for Parquet files and DuckDB
+└───doc/                   # Additional Documentation
 ```
 
-## Detailed schema
+## Setup & Configuration
 
-```mermaid
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository-url>
+    cd iot
+    ```
 
-%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '22px'}}}%%
-graph TD
-    %% Styles
-    classDef network fill:#f9f,stroke:#333,stroke-width:2px;
-    classDef device fill:#e1f5fe,stroke:#0277bd,stroke-width:2px;
-    classDef power fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
-    classDef server fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px;
+2.  **Environment Variables:**
+    Copy the example configuration file and update it with your actual credentials.
+    ```bash
+    cp .env_example .env
+    ```
+    Edit `.env`:
+    ```ini
+    MIKROTIK_HOST=10.10.100.1
+    MIKROTIK_USER=homebot
+    MIKROTIK_PASSWORD=your_secure_password
+    ```
 
-    subgraph Internet
-        ISP[ISP 1 Main]:::network
-    end
+## Running the Application
 
-    subgraph "Internal Network"
-        FW[Main Firewall<br/>Mikrotik RB4011]:::network
-        SW[Cloud Switch<br/>Mikrotik 610-8P-2S+OUT]:::network
-        
-        subgraph "Wired Devices"
-            Cam1[Camera 1<br/>HikVision DS-2CD1043G2]:::device
-            Cam2[Camera 2<br/>HikVision DS-2CD1043G2]:::device
-        end
+### Option 1: Python (Local Development)
 
-        subgraph "Wireless Access"
-            AP1[WiFi AP1<br/>hAP ax^2]:::network
-            AP2[WiFi AP2<br/>L22UGS-5HaxD2HaxD]:::network
-        end
-        
-        subgraph "Kubernetes Cluster (k3s)"
-            Master[Master Node<br/>Intel Core i7 16Gb]:::server
-            Node1[Node 1<br/>RPi 5 4GB]:::server
-            Node2[Node 2<br/>RPi 5 4GB]:::server
-        end
-    end
+1.  **Create and activate a virtual environment:**
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
+    ```
 
-    subgraph "Wireless Clients"
-        subgraph "IoT Power & Control"
-            ShellyPro4[Shelly Pro 4PM]:::device
-            ShellyPro2[Shelly Pro 2PM]:::device
-            ShellyMisc[Shelly Devices<br/>Uni, Switch25, Plug, Vintage, Bulb, 1PM]:::device
-        end
+2.  **Install dependencies:**
+    ```bash
+    pip install -r homebot/requirements.txt
+    ```
 
-        subgraph "Sensors & Security"
-            Sensors[Sensors<br/>Temp, Humidity, Motion]:::device
-            Lock[Door Lock]:::device
-        end
-        
-        subgraph "User Devices"
-            Users[Laptops, Phones]:::device
-            Media[LED Panels, TV Boxes]:::device
-        end
-    end
+3.  **Run the application:**
+    ```bash
+    python homebot/app.py
+    ```
+    The API will be available at `http://localhost:5000`.
 
-    subgraph "Autonomous Power System"
-        Inverter[Hybrid Inverter<br/>PowMR 6.5 kW]:::power
-        PV[PV 5kWt]:::power
-        Bat[Battery 5kWt]:::power
-        Gen[Generator 5.5kWt]:::power
-    end
+### Option 2: Docker Compose
 
-    %% Connections
-    ISP --> FW
-    FW --> SW
-    SW -->|PoE| Cam1
-    SW -->|PoE| Cam2
-    SW -->|PoE| AP1
-    SW -->|PoE| AP2
-    SW --> Master
-    SW --> Node1
-    SW --> Node2
+1.  **Build and run with Docker Compose:**
+    ```bash
+    docker-compose up -d --build
+    ```
 
-    %% Wireless Links
-    AP1 -.-> ShellyPro4
-    AP1 -.-> ShellyPro2
-    AP1 -.-> ShellyMisc
-    AP1 -.-> Sensors
-    AP1 -.-> Lock
-    AP1 -.-> Users
-    AP1 -.-> Media
-    AP1 -.-> Inverter
+2.  **View logs:**
+    ```bash
+    docker-compose logs -f
+    ```
 
-    AP2 -.-> ShellyPro4
-    AP2 -.-> ShellyPro2
-    AP2 -.-> ShellyMisc
-    AP2 -.-> Sensors
-    AP2 -.-> Lock
-    AP2 -.-> Users
-    AP2 -.-> Media
-    AP2 -.-> Inverter
-
-    %% Power System Logic
-    PV --> Inverter
-    Bat <--> Inverter
-    Gen --> Inverter
-    Inverter -.->|Power Supply| ShellyPro4
-    Inverter -.->|Power Supply| ShellyPro2
-```
+3.  **Stop the service:**
+    ```bash
+    docker-compose down
+    ```
 
 ## Data Processing & Analytics Pipeline
 

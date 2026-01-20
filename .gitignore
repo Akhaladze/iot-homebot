@@ -9,3 +9,4 @@ cert/
 data/
 network.db
 *.log
+.env

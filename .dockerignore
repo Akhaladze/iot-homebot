@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.vscode/
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+README.md
+data/
+network.db
