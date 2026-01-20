@@ -10,3 +10,4 @@ data/
 network.db
 *.log
 .envGeoLite2-City.mmdb
+homebot/services/__pycache__/mikrotik.cpython-314.pyc
