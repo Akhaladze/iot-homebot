@@ -1,7 +1,12 @@
 import os
 import time
 import multiprocessing
-from homebot import app
+import sys
+
+# Add project root to sys.path to allow importing 'homebot' modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from homebot.app import app
 from homebot.tasks import (
     collect_mikrotik_leases,
     collect_shelly_metrics,
