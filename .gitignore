@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+.vscode/
+.roo/
+.gemini/
+cert/
+data/
+network.db
+*.log
