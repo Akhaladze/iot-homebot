@@ -9,4 +9,4 @@ cert/
 data/
 network.db
 *.log
-.env
+.envGeoLite2-City.mmdb
