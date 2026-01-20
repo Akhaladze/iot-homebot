@@ -4,14 +4,14 @@
     },
 
     "mcpServers": {
-    "duckdb": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-duckdb",
-        "--db",
-        "/home/gnet/iot/network.db"
-      ]
+      "duckdb": {
+        "command": "uvx",
+        "args": [
+          "mcp-server-duckdb",
+          "--db-path",
+          "/absolute/path/to/your/network.db"
+        ]
+      }
     }
   }
-}
+
