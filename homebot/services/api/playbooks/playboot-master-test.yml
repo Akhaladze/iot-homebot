@@ -1,0 +1,29 @@
+---
+- name: Check API services status
+  hosts: localhost
+  gather_facts: no
+  vars:
+    api_endpoints:
+      - "https://backend-dev.mbit-consultants.com/v1/ping"
+      - "https://frontend-dev.mbit-consultants.com/ping"
+      - "https://parser-dev.mbit-consultants.com/ping"
+  tasks:
+    - name: Checking API endpoints
+      uri:
+        url: "{{ item }}"
+        method: GET
+        status_code: 200
+        return_content: yes
+      register: api_response
+      loop: "{{ api_endpoints }}"
+      ignore_errors: yes
+
+    - name: Display API check results
+      debug:
+        msg: >-
+          Endpoint: {{ item.item }} | 
+          Status: {{ 'Success' if item.status == 200 else 'Failed' }} |
+          HTTP Code: {{ item.status }} |
+          Response: {{ item.content | default('No Response') }}
+      loop: "{{ api_response.results }}"
+

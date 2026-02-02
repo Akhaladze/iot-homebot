@@ -1,0 +1,38 @@
+---
+- name: Check API services status
+  hosts: localhost
+  gather_facts: no
+  vars:
+    # List of API endpoints to check
+    mbit_dev_infra:
+      - "http://10.20.20.241:5432" # pg-backend-dev
+      - "http://10.20.20.245:15672" # rabbitmq-backend-dev"
+      - "http://10.20.20.129:3000" # backend-dev-worker
+      - "http://10.20.20.231:5432" # pg-parser-dev
+      - "http://10.20.20.129:81" # pg-parser-dev
+    api_endpoints:
+      - "https://backend-dev.mbit-consultants.com/api/ping" # backend dev external
+      - "http://10.20.20.240:3000/api/ping" # backend dev  internal
+      - "https://frontend-dev.mbit-consultants.com/api/ping" # frontend dev
+      - "http://10.20.20.230:5000/api/v1/ping" # parser service
+      - "http://10.20.20.129:6000/api/ping" # parser clasifier
+  tasks:
+    - name: Checking API endpoints
+      uri:
+        url: "{{ item }}"
+        method: GET
+        status_code: 200
+        return_content: yes
+      register: api_response
+      loop: "{{ api_endpoints }}"
+      ignore_errors: yes
+
+    - name: Display API check results
+      debug:
+        msg: >-
+          Endpoint: {{ item.item }} | 
+          Status: {{ 'Success' if item.status == 200 else 'Failed' }} |
+          HTTP Code: {{ item.status }} |
+          Response: {{ item.content | default('No Response') }}
+      loop: "{{ api_response.results }}"
+
