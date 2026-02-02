@@ -1,0 +1,19 @@
+---
+nginx_user: nginx
+openresty_ver: 1.25.3.1
+openresty_src_dir: /usr/local/src/openresty-{{ openresty_ver }}
+openresty_prefix: /usr/local/openresty
+geoip_module_url: "https://github.com/leev/ngx_http_geoip2_module.git"
+geoip_module_dir: /usr/local/src/ngx_http_geoip2_module
+opentelemetry_module_dir: /usr/local/src/ngx_http_opentelemetry_module
+
+nginx_conf_dir: /etc/nginx
+nginx_conf_d_dir: /etc/nginx/conf.d
+nginx_stream_dir: /etc/nginx/stream.d
+geoip_data_dir: /usr/share/GeoIP
+
+frontend_upstream: "frontend-test:4200"
+backend_upstream: "backend-test:3000"
+parser_upstream: "parser_api:8000"
+
+otel_collector_host: "otel-collector"

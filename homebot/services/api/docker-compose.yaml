@@ -1,0 +1,25 @@
+version: '3'
+services:
+  app:
+    #image: flask-docker-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - flask_telegram:/app
+    environment:
+      - PORT=5030
+      - NODE_ENV=development
+      - FLASK_APP=app.py
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - TELEGRAM_BOT=6498892223:AAHkHja0P0_m8tg6Lx75vOA7db1sZpP03a0
+    command: flask -A app run -h 0.0.0.0 -p 5030  --reload --debug
+    networks:
+      proxy-network:
+        ipv4_address: 172.30.0.180
+networks:
+  proxy-network:
+    external: true
+volumes:
+  flask_telegram:

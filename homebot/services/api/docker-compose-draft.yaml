@@ -1,0 +1,186 @@
+services:
+  # === PostgreSQL for Backend ===
+  postgres:
+    image: postgres:15.3-alpine
+    volumes:
+      - postgres_data_backend_test:/var/lib/postgresql/data
+    env_file: stack.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-pgpass}@10.20.40.241:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-ipd}?schema=${POSTGRES_SCHEMA:-public}
+      POSTGRES_INITDB_ARGS: "-log_min_messages=WARNING --log_error_verbosity=DEFAULT"
+    restart: unless-stopped
+    networks:
+      test:
+        ipv4_address: 10.20.40.241
+
+  # === Backend API ===
+  backend:
+    container_name: backend-test
+    image: registry.mbit-consultants.com/mbit/backend:latest-dev
+    extra_hosts:
+      - "auth.mbit-consultants.com:10.20.40.120"
+    volumes:
+      - backend-test:${STORAGE_PATH:-/usr/src/app/uploads}
+    command: ["npm", "run", "start"]
+    env_file: stack.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-pgpass}@10.20.40.241:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-idp}?schema=${POSTGRES_SCHEMA:-public}
+      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-Frdfkfyu2023!}
+      KEYCLOAK_ADMIN_CLIENT: ${KEYCLOAK_ADMIN_CLIENT}
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+    expose: 
+      - 3000/tcp
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      test:
+        ipv4_address: ${BACKEND_TEST_IP}
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:3000/api/ping"]
+      interval: 1m30s
+      timeout: 10s
+      retries: 3
+
+  # === Backend Worker ===
+  worker:
+    image: registry.mbit-consultants.com/mbit/backend:latest-dev
+    volumes:
+      - backend-test:${STORAGE_PATH:-/usr/src/app/uploads}
+    command: ["npm", "run", "start:worker"]
+    env_file: "${ENV_FILE:-stack.env}"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-pgpass}@10.20.40.241:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-idp}?schema=${POSTGRES_SCHEMA:-public}
+    depends_on:
+      - rabbitmq
+      - backend
+      - postgres
+    restart: unless-stopped
+    networks:
+      - test
+
+  # === RabbitMQ ===
+  rabbitmq:
+    restart: unless-stopped
+    image: rabbitmq:3-management-alpine
+    volumes:
+      - rabbitmq-test:/var/lib/rabbitmq/
+      - rabbitmq-test-log:/var/log/rabbitmq/
+    env_file:
+      - stack.env
+    networks:
+      test:
+        ipv4_address: 10.20.40.245
+    expose:
+      - 15672
+
+  # === Frontend (Nest.js) ===
+  frontend:
+    container_name: frontend-test
+    image: registry.mbit-consultants.com/mbit/frontend:latest-dev
+    env_file: stack.env
+    environment:
+      BACKEND_URL: http://${BACKEND_TEST_IP:-10.20.40.242}:3000
+    expose:
+      - 4200/tcp
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      test:
+        ipv4_address: ${FRONTEND_TEST_IP}
+
+  # === Parser DB (PostgreSQL) ===
+  parser_postgres:
+    image: postgres:15.3-alpine
+    volumes:
+      - postgres_data_parser_test:/var/lib/postgresql/data
+    env_file: stack.env
+    environment:
+      POSTGRES_DB: ${PARSER_DB:-parser}
+      POSTGRES_USER: ${PARSER_DB_USER:-parser}
+      POSTGRES_PASSWORD: ${PARSER_DB_PASSWORD:-parserpass}
+    restart: unless-stopped
+    networks:
+      test:
+        ipv4_address: ${PARSER_DB_IP}
+
+  # === Parser API (Django) ===
+  parser_api:
+    image: registry.mbit-consultants.com/mbit/parser:latest-dev
+    env_file: stack.env
+    command: ["gunicorn", "--bind", "0.0.0.0:8000", "parser.wsgi:application"]
+    depends_on:
+      - parser_postgres
+      - rabbitmq
+    expose:
+      - 8000/tcp
+    restart: unless-stopped
+    networks:
+      test:
+        ipv4_address: ${PARSER_API_IP}
+
+  # === Parser Worker (Celery) ===
+  parser_worker:
+    image: registry.mbit-consultants.com/mbit/parser:latest-dev
+    env_file: stack.env
+    command: ["celery", "-A", "parser", "worker", "-l", "info"]
+    depends_on:
+      - parser_postgres
+      - rabbitmq
+    restart: unless-stopped
+    networks:
+      test:
+        ipv4_address: ${PARSER_WORKER_IP}
+
+volumes:
+  backend-test:
+  postgres_data_parser_test:
+  postgres_data_backend_test:
+  rabbitmq-test:
+  rabbitmq-test-log:
+  
+networks:
+  test:
+    external: true
+
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=pgpass
+POSTGRES_URL=postgresql://postgres:pgpass@10.20.40.241:5432/idp?schema=public
+PARSER_URL=http://10.20.40.230:5000
+POSTGRES_DB=idp
+POSTGRES_PORT=5432
+SERVICE_TAG=latest-dev
+STORAGE_PATH=/usr/src/app/uploads
+KEYCLOAK_URL=https://auth.mbit-consultants.com
+KEYCLOAK_CLIENT=mbit
+KEYCLOAK_CLIENT_SECRET=Ds2aarttJ3XrBG0Zf3fgUvZHiuaLhCLy
+KEYCLOAK_PUBLIC_KEY=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAufYV5xb8g1aACR4EuaY/MoDZgL/6rOSNFoK6lNDiMuQsk6A5O4HJCCua4HGc+kADxGZbpQKG6BJsbINn6soAXEpOrbdV9+HdCZJLmlzcQDIXWHVfJY26WUojUJf6Tmbbm4wvdeRrGiRdNR7uHeWeo/3zn3jDvVu1T2jRNRRFKc1lZhm5bES8LvFPXwAwLgcjCZNkXATbW0lE/6u9hQGeBpczSbsC4o9cQ87p9P/8ONwYRS/6EuDi7SOjHjxo4kvnM79nv+lRgkN7qagn5qgNAJXxrV9mOR+TbPKWU0wOIUpRVHIOnXUJrVRTZPzRNEofDhbvB3iG9gBR98c1groOjwIDAQAB
+KEYCLOAK_REALM=mbit
+KEYCLOAK_ADMIN_CLIENT=mbit
+KEYCLOAK_ADMIN_CLIENT_SECRET=Ds2aarttJ3XrBG0Zf3fgUvZHiuaLhCLy
+RABBITMQ_DEFAULT_USER=admin-mq-backend
+RABBITMQ_DEFAULT_PASS=Frdfkfyu2023
+LOG_LEVEL=ERROR
+ENV=dev
+RABBIT_URL=amqp://admin-mq-backend:Frdfkfyu2023@backend-test-rabbitmq-1:5672
+MAX_CONCURRENT_PROCESSES=15
+GELF_DEV="udp://172.25.0.190:12301"
+GELF_INFRA="udp://172.25.0.190:12201"
+GELF_PROD="udp://172.25.0.190:12101"
+DEV_FRONT=10.20.20.242
+PROD_FRONT=10.20.100.242
+BACKEND_TEST_IP=10.20.40.240
+POSTGRES_INITDB_ARGS="-log_min_messages=WARNING --log_error_verbosity=DEFAULT"
+UNLIMITED_LICENSE=true
+BACKEND_TEST_DB_IP=10.20.40.241
+KEYCLOAK_ADMIN_USERNAME=admin
+OTLPT_RUL=http://10.20.20.44:4318/v1/traces
+OTEL_SERVICE_NAME_BACKEND=backend-test
+OTEL_SERVICE_NAME_WORKER=worker-test
+BACKEND_TEST_IP=10.20.40.242
+FRONTEND_TEST_IP=10.20.40.243
+PARSER_DB_IP=10.20.40.244
+PARSER_API_IP=10.20.40.246
+PARSER_WORKER_IP=10.20.40.247
