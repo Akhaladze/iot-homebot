@@ -204,7 +204,7 @@ def collect_weather():
     """Fetches weather data."""
     print(f"[{datetime.now()}] Starting Weather Sync...")
     try:
-        city = os.getenv("WEATHER_CITY", "London")
+        city = os.getenv("WEATHER_CITY", "Hostomel")
         data = weather_service.get_weather(city)
         if "error" not in data:
             df = pd.DataFrame([data])

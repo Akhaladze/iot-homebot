@@ -1,0 +1,40 @@
+// Define the scraping job for k3s nodes
+prometheus.scrape "k3s_nodes" {
+    // List your k3s node IPs here
+    targets = [
+        { "__address__" = "192.168.1.50:10250", instance = "k3s-master" },
+        { "__address__" = "192.168.1.51:10250", instance = "k3s-worker-1" },
+    ]
+
+    scheme = "https"
+    tls_config {
+        insecure_skip_verify = true // Often needed for internal k3s IPs
+    }
+
+    // You usually need a token to access /metrics/cadvisor
+    // Mount this file via docker volumes or use bearer_token string directly
+    bearer_token_file = "/etc/alloy/k3s_token"
+
+    // Metrics path for Kubelet (includes cAdvisor metrics for containers)
+    metrics_path = "/metrics/cadvisor" 
+    
+    // Add helpful labels
+    relabel_rules = discovery.relabel.k3s_relabel.rules
+
+    forward_to = [prometheus.remote_write.default.receiver]
+}
+
+// Relabeling rules to clean up metrics
+discovery.relabel "k3s_relabel" {
+    targets = [] // Provided by the scrape job
+    
+    rule {
+        action = "labelmap"
+        regex  = "__meta_kubernetes_node_label_(.+)"
+    }
+    
+    rule {
+        target_label = "cluster"
+        replacement  = "home-k3s"
+    }
+}

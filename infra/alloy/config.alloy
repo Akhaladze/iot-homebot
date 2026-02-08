@@ -1,0 +1,56 @@
+
+livedebugging {
+  enabled = true
+}
+
+
+
+
+loki.source.syslog "local" {
+  listener {
+    address  = "0.0.0.0:1514"
+    labels   = { component = "loki.source.syslog", protocol = "tcp" }
+  }
+
+  listener {
+    address  = "0.0.0.0:1514"
+    protocol = "udp"
+    labels   = { component = "loki.source.syslog", protocol = "udp"}
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+prometheus.remote_write "local" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+
+
+
+// --- SNMP SCRAPER ---
+// This module acts like the classic snmp_exporter
+prometheus.exporter.snmp "network_devices" {
+  config_file = "/etc/alloy/snmp.yml" 
+  
+  target "router_main" {
+    address = "10.10.100.1"
+    module  = "if_mib"
+    auth    = "public_v2"
+  }
+
+}
+
+prometheus.scrape "snmp_scraper" {
+  targets    = prometheus.exporter.snmp.network_devices.targets
+  forward_to = [prometheus.remote_write.local.receiver]
+  scrape_interval = "60s"
+}
