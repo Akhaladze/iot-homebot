@@ -1,0 +1,22 @@
+// Define the destination for metrics (Mimir/Prometheus)
+prometheus.remote_write "default" {
+    endpoint {
+        url = "http://mimir:9009/api/v1/push"
+    }
+}
+
+// Define the destination for logs (Loki)
+loki.write "default" {
+    endpoint {
+        // Replace with your Loki URL
+        url = "http://loki:3100/loki/api/v1/push"
+    }
+}
+
+// Optional: Self-monitoring of the Alloy instance itself
+prometheus.exporter.self "alloy_health" {}
+
+prometheus.scrape "alloy_scraper" {
+    targets    = prometheus.exporter.self.alloy_health.targets
+    forward_to = [prometheus.remote_write.default.receiver]
+}

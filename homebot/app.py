@@ -4,9 +4,11 @@ import requests
 import pandas as pd
 import duckdb
 import urllib3
+from flask import request
 from flask import Flask, jsonify
 from datetime import datetime
 from services.mikrotik import MikroTikService
+from homebot.services.telegrambot import tg_service
 
 app = Flask(__name__)
 
@@ -91,6 +93,28 @@ def sync_all():
         return jsonify({"status": "success", "synced_shelly": len(results)})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+
+@app.route('/webhook', methods=['POST'])
+def telegram_webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        tg_service.process_update(json_string)
+        return 'OK', 200
+    else:
+        return jsonify({"error": "Forbidden"}), 403
+def setup_webhook():
+    webhook_url = os.getenv("WEBHOOK_URL")
+    if webhook_url:
+        tg_service.bot.remove_webhook()
+        success = tg_service.bot.set_webhook(url=f"{webhook_url}/webhook")
+        if success:
+            print(f"✅ Webhook set to: {webhook_url}/webhook")
+        else:
+            print("❌ Failed to set webhook")
+
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -1,0 +1,860 @@
+{% extends "layout.html" %}
+
+{% block title %}Session Replay{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Map Replay Area -->
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><i class="fas fa-play me-2"></i>Visual Game Replay</h4>
+                <div>
+                    <button id="play-pause-btn" class="btn btn-light btn-sm me-2">
+                        <i class="fas fa-play"></i> Play
+                    </button>
+                    <button id="step-btn" class="btn btn-outline-light btn-sm me-2">
+                        <i class="fas fa-step-forward"></i> Step
+                    </button>
+                    <button id="reset-btn" class="btn btn-outline-light btn-sm me-2">
+                        <i class="fas fa-undo"></i> Reset
+                    </button>
+                    <a href="/replay" class="btn btn-outline-light btn-sm">
+                        <i class="fas fa-arrow-left me-1"></i>Back
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="loading" class="text-center py-4">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading session data from Tempo...</p>
+                </div>
+                
+                <div id="replay-content" style="display: none;">
+                    <!-- Progress Bar -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small><strong>Session:</strong> <code id="session-id">{{ session_id }}</code></small>
+                            <small>Action <span id="current-step">0</span> of <span id="total-steps">0</span></small>
+                        </div>
+                        <div class="progress">
+                            <div id="replay-progress" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Game Map -->
+                    <div id="mapContainer" class="position-relative border rounded bg-light" style="height: 500px;">
+                        <canvas id="mapCanvas" class="h-100 w-100"></canvas>
+                        <div id="mapMarkers"></div>
+                        
+                        <!-- Action Indicator -->
+                        <div id="actionIndicator" class="position-absolute top-0 start-0 m-3 p-2 bg-dark text-white rounded d-none">
+                            <strong id="actionType">Action</strong>
+                            <small id="actionDetails" class="d-block"></small>
+                        </div>
+                        
+                        <!-- Replay Speed Control -->
+                        <div class="position-absolute bottom-0 start-0 m-3">
+                            <label for="speed-control" class="form-label small text-muted">Speed:</label>
+                            <select id="speed-control" class="form-select form-select-sm" style="width: 100px;">
+                                <option value="3000">Slow</option>
+                                <option value="2000" selected>Normal</option>
+                                <option value="1000">Fast</option>
+                                <option value="500">Very Fast</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="error-message" class="alert alert-danger" style="display: none;">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span id="error-text"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Span Details Panel -->
+    <div class="col-md-4">
+        <!-- Current Action Details -->
+        <div class="card shadow mb-3">
+            <div class="card-header bg-warning text-dark">
+                <h6 class="mb-0"><i class="fas fa-crosshairs me-2"></i>Current Action</h6>
+            </div>
+            <div class="card-body">
+                <div id="current-action-details">
+                    <p class="text-muted">Click play to start replay</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Span Attributes -->
+        <div class="card shadow mb-3">
+            <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="fas fa-tags me-2"></i>Span Attributes</h6>
+            </div>
+            <div class="card-body">
+                <div id="span-attributes">
+                    <p class="text-muted small">No action selected</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Session Information -->
+        <div class="card shadow mb-3">
+            <div class="card-header bg-secondary text-white">
+                <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Session Info</h6>
+            </div>
+            <div class="card-body">
+                <div id="session-info">
+                    <p><strong>Player:</strong> <span id="player-name">Loading...</span></p>
+                    <p><strong>Faction:</strong> <span id="faction-badge" class="badge">Loading...</span></p>
+                    <p><strong>Total Actions:</strong> <span id="total-actions">0</span></p>
+                    <p><strong>Data Source:</strong> <span id="data-source" class="badge bg-info">Tempo</span></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Span Links -->
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="fas fa-link me-2"></i>Span Links</h6>
+            </div>
+            <div class="card-body">
+                <div id="span-links-info">
+                    <p class="small text-muted">Loading span link analysis...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    #mapContainer {
+        overflow: hidden;
+    }
+    
+    .location-marker {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        border: 2px solid #fff;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+        transition: all 0.3s ease;
+        z-index: 10;
+    }
+    
+    .location-marker.capital {
+        width: 50px;
+        height: 50px;
+    }
+    
+    .location-marker.southern {
+        background-color: #8B0000;
+    }
+    
+    .location-marker.northern {
+        background-color: #343a40;
+    }
+    
+    .location-marker.neutral {
+        background-color: #6c757d;
+    }
+    
+    .location-marker.active {
+        box-shadow: 0 0 20px #fff, 0 0 30px #fff;
+        animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { transform: translate(-50%, -50%) scale(1); }
+        50% { transform: translate(-50%, -50%) scale(1.2); }
+        100% { transform: translate(-50%, -50%) scale(1); }
+    }
+    
+    .movement-arrow {
+        position: absolute;
+        z-index: 15;
+        pointer-events: none;
+        color: #fff;
+        font-size: 24px;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+        animation: moveAlongPath 2s ease-in-out;
+    }
+    
+    @keyframes moveAlongPath {
+        0% { opacity: 0; transform: scale(0.5); }
+        50% { opacity: 1; transform: scale(1); }
+        100% { opacity: 0; transform: scale(0.5); }
+    }
+    
+    .badge.southern {
+        background-color: #8B0000 !important;
+    }
+    
+    .badge.northern {
+        background-color: #343a40 !important;
+    }
+    
+    .badge.neutral {
+        background-color: #6c757d !important;
+    }
+    
+    #span-attributes {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    
+    .attribute-item {
+        border-left: 3px solid #007bff;
+        padding-left: 8px;
+        margin-bottom: 8px;
+    }
+    
+    /* Resource and army badges on markers */
+    .location-marker .badge {
+        font-size: 0.7em !important;
+        min-width: 1.5em;
+        height: 1.5em;
+        line-height: 1.3;
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        font-weight: bold;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .location-marker .badge.bg-warning {
+        color: #000 !important;
+        background-color: #ffc107 !important;
+    }
+    
+    .location-marker .badge.bg-danger {
+        color: #fff !important;
+        background-color: #dc3545 !important;
+    }
+    
+    /* Highlight effect for active locations */
+    .location-marker.action-highlight {
+        box-shadow: 0 0 25px #fff, 0 0 35px #ffff00;
+        animation: actionPulse 1.5s ease-in-out;
+    }
+    
+    @keyframes actionPulse {
+        0% { transform: translate(-50%, -50%) scale(1); }
+        50% { transform: translate(-50%, -50%) scale(1.3); }
+        100% { transform: translate(-50%, -50%) scale(1); }
+    }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Game state and replay control
+let sessionData = null;
+let currentStep = 0;
+let isPlaying = false;
+let replayInterval = null;
+let gameLocations = {};
+let replaySpeed = 2000; // milliseconds
+
+// Location positions (from map.html)
+const LOCATION_POSITIONS = {
+    "southern_capital": {"x": 20, "y": 70, "type": "capital", "name": "Southern Capital"},
+    "northern_capital": {"x": 80, "y": 20, "type": "capital", "name": "Northern Capital"},
+    "village_1": {"x": 35, "y": 55, "type": "village", "name": "Village 1"},
+    "village_2": {"x": 65, "y": 35, "type": "village", "name": "Village 2"},
+    "village_3": {"x": 30, "y": 40, "type": "village", "name": "Village 3"},
+    "village_4": {"x": 45, "y": 65, "type": "village", "name": "Village 4"},
+    "village_5": {"x": 50, "y": 50, "type": "village", "name": "Village 5"},
+    "village_6": {"x": 70, "y": 45, "type": "village", "name": "Village 6"}
+};
+
+const LOCATION_CONNECTIONS = [
+    ["southern_capital", "village_1"],
+    ["southern_capital", "village_3"],
+    ["northern_capital", "village_2"],
+    ["northern_capital", "village_6"],
+    ["village_1", "village_2"],
+    ["village_1", "village_4"],
+    ["village_2", "village_5"],
+    ["village_3", "village_5"],
+    ["village_3", "village_6"],
+    ["village_4", "village_5"],
+    ["village_5", "village_6"]
+];
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadSessionData();
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    document.getElementById('play-pause-btn').addEventListener('click', togglePlayPause);
+    document.getElementById('step-btn').addEventListener('click', stepForward);
+    document.getElementById('reset-btn').addEventListener('click', resetReplay);
+    document.getElementById('speed-control').addEventListener('change', function(e) {
+        replaySpeed = parseInt(e.target.value);
+    });
+}
+
+async function loadSessionData() {
+    const sessionId = '{{ session_id }}';
+    
+    try {
+        const response = await fetch(`/api/replay/session/${sessionId}`);
+        const data = await response.json();
+        
+        document.getElementById('loading').style.display = 'none';
+        
+        if (data.success) {
+            sessionData = data;
+            initializeReplay();
+            initializeMap();
+            displaySessionInfo(data);
+            displaySpanLinkChain(data.span_link_chain || []);
+        } else {
+            showError(data.error || 'Failed to load session');
+        }
+    } catch (error) {
+        document.getElementById('loading').style.display = 'none';
+        showError('Failed to load session: ' + error.message);
+    }
+}
+
+function initializeReplay() {
+    document.getElementById('replay-content').style.display = 'block';
+    
+    // Initialize action sequence counter
+    currentStep = 0;
+    
+    // Update display elements
+    updateProgress();
+    
+    // Initialize game locations with proper starting state
+    Object.keys(LOCATION_POSITIONS).forEach(locationId => {
+        gameLocations[locationId] = {
+            ...LOCATION_POSITIONS[locationId],
+            faction: getInitialFaction(locationId),
+            army: getInitialArmy(locationId),
+            resources: getInitialResources(locationId)
+        };
+    });
+}
+
+function getInitialFaction(locationId) {
+    if (locationId === 'southern_capital') return 'southern';
+    if (locationId === 'northern_capital') return 'northern';
+    return 'neutral';
+}
+
+function getInitialArmy(locationId) {
+    if (locationId === 'southern_capital' || locationId === 'northern_capital') return 2;
+    return 0;
+}
+
+function getInitialResources(locationId) {
+    if (locationId === 'southern_capital' || locationId === 'northern_capital') return 50;
+    if (locationId.startsWith('village_')) return 10;
+    return 0;
+}
+
+function initializeMap() {
+    const mapContainer = document.getElementById('mapContainer');
+    const mapCanvas = document.getElementById('mapCanvas');
+    const markersContainer = document.getElementById('mapMarkers');
+    
+    // Set canvas size
+    mapCanvas.width = mapContainer.clientWidth;
+    mapCanvas.height = mapContainer.clientHeight;
+    
+    drawConnections();
+    createLocationMarkers();
+}
+
+function drawConnections() {
+    const canvas = document.getElementById('mapCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    ctx.strokeStyle = 'rgba(200, 200, 200, 0.7)';
+    ctx.lineWidth = 2;
+    
+    LOCATION_CONNECTIONS.forEach(connection => {
+        const loc1 = LOCATION_POSITIONS[connection[0]];
+        const loc2 = LOCATION_POSITIONS[connection[1]];
+        
+        if (loc1 && loc2) {
+            const x1 = canvas.width * (loc1.x / 100);
+            const y1 = canvas.height * (loc1.y / 100);
+            const x2 = canvas.width * (loc2.x / 100);
+            const y2 = canvas.height * (loc2.y / 100);
+            
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+    });
+}
+
+function createLocationMarkers() {
+    const markersContainer = document.getElementById('mapMarkers');
+    markersContainer.innerHTML = '';
+    
+    Object.keys(gameLocations).forEach(locationId => {
+        const location = gameLocations[locationId];
+        const marker = document.createElement('div');
+        
+        marker.id = `marker-${locationId}`;
+        marker.className = `location-marker ${location.faction} ${location.type}`;
+        marker.style.left = `${location.x}%`;
+        marker.style.top = `${location.y}%`;
+        
+        // Add tooltip with location details
+        marker.title = `${location.name}\nFaction: ${location.faction}\nArmy: ${location.army}\nResources: ${location.resources}`;
+        
+        // Add icon
+        let icon = document.createElement('i');
+        if (location.type === 'capital') {
+            if (location.faction === 'southern') {
+                icon.className = 'fas fa-sun';
+            } else if (location.faction === 'northern') {
+                icon.className = 'fas fa-snowflake';
+            } else {
+                icon.className = 'fas fa-chess-rook';
+            }
+        } else {
+            icon.className = 'fas fa-map-marker-alt';
+        }
+        marker.appendChild(icon);
+        
+        // Add army badge if there are troops
+        if (location.army > 0) {
+            const armyBadge = document.createElement('span');
+            armyBadge.className = 'position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger';
+            armyBadge.textContent = Math.floor(location.army); // Ensure integer display
+            armyBadge.style.fontSize = '0.7em';
+            armyBadge.style.minWidth = '1.5em';
+            armyBadge.title = `Army: ${location.army}`;
+            marker.appendChild(armyBadge);
+        }
+        
+        // Add resources badge for significant amounts
+        if (location.resources > 0) {
+            const resourcesBadge = document.createElement('span');
+            resourcesBadge.className = 'position-absolute bottom-0 start-100 translate-middle badge rounded-pill bg-warning text-dark';
+            resourcesBadge.textContent = Math.floor(location.resources); // Ensure integer display
+            resourcesBadge.style.fontSize = '0.7em';
+            resourcesBadge.style.minWidth = '1.5em';
+            resourcesBadge.title = `Resources: ${location.resources}`;
+            marker.appendChild(resourcesBadge);
+        }
+        
+        markersContainer.appendChild(marker);
+    });
+}
+
+function displaySessionInfo(data) {
+    if (data.actions && data.actions.length > 0) {
+        const firstAction = data.actions[0];
+        document.getElementById('player-name').textContent = firstAction.player_name || 'Unknown';
+        
+        const factionBadge = document.getElementById('faction-badge');
+        const faction = firstAction.faction || 'unknown';
+        factionBadge.textContent = faction.charAt(0).toUpperCase() + faction.slice(1);
+        factionBadge.className = `badge ${faction === 'southern' ? 'bg-danger' : 'bg-primary'}`;
+    }
+    
+    document.getElementById('total-actions').textContent = data.total_actions || 0;
+    document.getElementById('data-source').textContent = data.data_source || 'Tempo';
+}
+
+function displaySpanLinkChain(spanLinkChain) {
+    const linksInfo = document.getElementById('span-links-info');
+    
+    if (spanLinkChain.length === 0) {
+        linksInfo.innerHTML = '<p class="small text-muted">No span link data available</p>';
+        return;
+    }
+    
+    const validChain = spanLinkChain.every(link => link.valid_chain);
+    
+    let html = `<div class="mb-2">
+        <span class="badge ${validChain ? 'bg-success' : 'bg-warning'}">
+            ${validChain ? 'Valid Chain' : 'Issues Found'}
+        </span>
+    </div>`;
+    
+    spanLinkChain.slice(0, 5).forEach((link, index) => {
+        html += `<div class="small mb-2 p-2 border-start border-3 ${link.valid_chain ? 'border-success' : 'border-warning'}">
+            <strong>Step ${link.sequence}:</strong> ${link.action_type}<br>
+            <span class="text-muted">${link.note}</span>
+        </div>`;
+    });
+    
+    if (spanLinkChain.length > 5) {
+        html += `<small class="text-muted">... and ${spanLinkChain.length - 5} more</small>`;
+    }
+    
+    linksInfo.innerHTML = html;
+}
+
+function togglePlayPause() {
+    if (isPlaying) {
+        pauseReplay();
+    } else {
+        startReplay();
+    }
+}
+
+function startReplay() {
+    if (!sessionData || !sessionData.actions) return;
+    
+    isPlaying = true;
+    document.getElementById('play-pause-btn').innerHTML = '<i class="fas fa-pause"></i> Pause';
+    
+    replayInterval = setInterval(() => {
+        if (currentStep < sessionData.actions.length) {
+            executeAction(sessionData.actions[currentStep]);
+            currentStep++;
+            updateProgress();
+        } else {
+            pauseReplay();
+        }
+    }, replaySpeed);
+}
+
+function pauseReplay() {
+    isPlaying = false;
+    if (replayInterval) {
+        clearInterval(replayInterval);
+        replayInterval = null;
+    }
+    document.getElementById('play-pause-btn').innerHTML = '<i class="fas fa-play"></i> Play';
+}
+
+function stepForward() {
+    if (currentStep < sessionData.actions.length) {
+        executeAction(sessionData.actions[currentStep]);
+        currentStep++;
+        updateProgress();
+    }
+}
+
+function resetReplay() {
+    pauseReplay();
+    currentStep = 0;
+    
+    // Reset game locations to initial state
+    Object.keys(LOCATION_POSITIONS).forEach(locationId => {
+        gameLocations[locationId] = {
+            ...LOCATION_POSITIONS[locationId],
+            faction: getInitialFaction(locationId),
+            army: getInitialArmy(locationId),
+            resources: getInitialResources(locationId)
+        };
+    });
+    
+    createLocationMarkers();
+    updateProgress();
+    clearActionIndicator();
+    clearCurrentActionDetails();
+    clearSpanAttributes();
+}
+
+function clearSpanAttributes() {
+    document.getElementById('span-attributes').innerHTML = '<p class="small text-muted">No action selected</p>';
+}
+
+function executeAction(action) {
+    showActionIndicator(action);
+    updateCurrentActionDetails(action);
+    updateSpanAttributes(action);
+    
+    // Simulate the action effect on the game state and map
+    switch(action.action_type) {
+        case 'collect_resources':
+            simulateCollectResources(action);
+            highlightLocation(action.location_id || action.source_location);
+            break;
+        case 'create_army':
+            simulateCreateArmy(action);
+            highlightLocation(action.location_id || action.source_location);
+            break;
+        case 'move_army':
+            if (action.source_location && action.target_location) {
+                simulateMoveArmy(action);
+                highlightMovement(action.source_location, action.target_location);
+            }
+            break;
+        case 'all_out_attack':
+            simulateAllOutAttack(action);
+            highlightLocation(action.location_id || action.source_location, 'attack');
+            break;
+        case 'send_resources_to_capital':
+            simulateSendResources(action);
+            highlightLocation(action.location_id || action.source_location);
+            break;
+    }
+    
+    // Update the visual representation
+    createLocationMarkers();
+}
+
+function simulateCollectResources(action) {
+    const locationId = action.location_id || action.source_location;
+    if (gameLocations[locationId]) {
+        gameLocations[locationId].resources = Math.floor(gameLocations[locationId].resources + 10); // Typical resource collection amount
+    }
+}
+
+function simulateCreateArmy(action) {
+    const locationId = action.location_id || action.source_location;
+    if (gameLocations[locationId]) {
+        gameLocations[locationId].resources = Math.max(0, Math.floor(gameLocations[locationId].resources - 30));
+        gameLocations[locationId].army = Math.floor(gameLocations[locationId].army + 1);
+    }
+}
+
+function simulateMoveArmy(action) {
+    const sourceId = action.source_location;
+    const targetId = action.target_location;
+    
+    if (gameLocations[sourceId] && gameLocations[targetId]) {
+        const sourceLocation = gameLocations[sourceId];
+        const targetLocation = gameLocations[targetId];
+        
+        if (sourceLocation.army > 0) {
+            const movingArmies = Math.floor(sourceLocation.army);
+            sourceLocation.army = 0;
+            
+            // If it's an attack (different factions)
+            if (sourceLocation.faction !== targetLocation.faction) {
+                // Simple combat simulation
+                if (movingArmies > targetLocation.army) {
+                    // Attacker wins - take over location
+                    targetLocation.faction = sourceLocation.faction;
+                    targetLocation.army = Math.floor(movingArmies - targetLocation.army);
+                } else {
+                    // Defender wins
+                    targetLocation.army = Math.max(1, Math.floor(targetLocation.army - movingArmies));
+                }
+            } else {
+                // Friendly reinforcement
+                targetLocation.army = Math.floor(targetLocation.army + movingArmies);
+            }
+        }
+    }
+}
+
+function simulateAllOutAttack(action) {
+    const locationId = action.location_id || action.source_location;
+    if (gameLocations[locationId]) {
+        // For all-out attack, we simulate sending all armies
+        const location = gameLocations[locationId];
+        const faction = location.faction;
+        
+        // Find enemy capital
+        let enemyCapital = null;
+        if (faction === 'southern') {
+            enemyCapital = 'northern_capital';
+        } else if (faction === 'northern') {
+            enemyCapital = 'southern_capital';
+        }
+        
+        if (enemyCapital && gameLocations[enemyCapital]) {
+            const attackingArmies = Math.floor(location.army);
+            location.army = 0;
+            
+            const enemyLocation = gameLocations[enemyCapital];
+            if (attackingArmies > enemyLocation.army) {
+                // Attacker wins - game over scenario
+                enemyLocation.faction = faction;
+                enemyLocation.army = Math.floor(attackingArmies - enemyLocation.army);
+            } else {
+                // Defender survives
+                enemyLocation.army = Math.max(1, Math.floor(enemyLocation.army - attackingArmies));
+            }
+        }
+    }
+}
+
+function simulateSendResources(action) {
+    const locationId = action.location_id || action.source_location;
+    if (gameLocations[locationId]) {
+        const location = gameLocations[locationId];
+        const resources = Math.floor(location.resources);
+        location.resources = 0;
+        
+        // Find appropriate capital based on faction
+        let capitalId = null;
+        if (location.faction === 'southern') {
+            capitalId = 'southern_capital';
+        } else if (location.faction === 'northern') {
+            capitalId = 'northern_capital';
+        }
+        
+        if (capitalId && gameLocations[capitalId]) {
+            gameLocations[capitalId].resources = Math.floor(gameLocations[capitalId].resources + resources);
+        }
+    }
+}
+
+function highlightLocation(locationId, type = 'action') {
+    // Remove previous highlights
+    document.querySelectorAll('.location-marker').forEach(marker => {
+        marker.classList.remove('active', 'action-highlight');
+    });
+    
+    // Highlight the current location
+    const marker = document.getElementById(`marker-${locationId}`);
+    if (marker) {
+        marker.classList.add('action-highlight');
+        
+        // Remove highlight after animation
+        setTimeout(() => {
+            marker.classList.remove('action-highlight');
+        }, 2000);
+    }
+}
+
+function highlightMovement(sourceId, targetId) {
+    const sourcePos = LOCATION_POSITIONS[sourceId];
+    const targetPos = LOCATION_POSITIONS[targetId];
+    
+    if (!sourcePos || !targetPos) return;
+    
+    // Highlight source location first
+    highlightLocation(sourceId);
+    
+    // Create movement arrow
+    const mapContainer = document.getElementById('mapContainer');
+    const arrow = document.createElement('div');
+    arrow.className = 'movement-arrow';
+    arrow.innerHTML = '<i class="fas fa-arrow-right"></i>';
+    
+    // Calculate angle for arrow direction
+    const dx = targetPos.x - sourcePos.x;
+    const dy = targetPos.y - sourcePos.y;
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    
+    // Position arrow between locations
+    const avgX = (sourcePos.x + targetPos.x) / 2;
+    const avgY = (sourcePos.y + targetPos.y) / 2;
+    arrow.style.left = `${avgX}%`;
+    arrow.style.top = `${avgY}%`;
+    arrow.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+    
+    mapContainer.appendChild(arrow);
+    
+    // Highlight target location after a delay
+    setTimeout(() => {
+        highlightLocation(targetId);
+    }, 1000);
+    
+    // Remove arrow after animation
+    setTimeout(() => {
+        arrow.remove();
+    }, 2500);
+}
+
+function showActionIndicator(action) {
+    const indicator = document.getElementById('actionIndicator');
+    const actionType = document.getElementById('actionType');
+    const actionDetails = document.getElementById('actionDetails');
+    
+    actionType.textContent = action.action_type || 'Unknown Action';
+    
+    let details = `Sequence: ${action.sequence || 'N/A'}`;
+    if (action.player_name) details += ` | Player: ${action.player_name}`;
+    if (action.source_location) details += ` | From: ${action.source_location}`;
+    if (action.target_location) details += ` | To: ${action.target_location}`;
+    
+    actionDetails.textContent = details;
+    indicator.classList.remove('d-none');
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+        indicator.classList.add('d-none');
+    }, 3000);
+}
+
+function clearActionIndicator() {
+    document.getElementById('actionIndicator').classList.add('d-none');
+}
+
+function updateCurrentActionDetails(action) {
+    const detailsDiv = document.getElementById('current-action-details');
+    
+    const timestamp = new Date(action.start_time / 1000000);
+    const duration = action.duration ? (action.duration / 1000000).toFixed(2) + 'ms' : 'N/A';
+    
+    // Display sequence number as 1-based for user friendliness
+    const displaySequence = action.sequence || currentStep;
+    
+    detailsDiv.innerHTML = `
+        <h6>${action.action_type || action.operation}</h6>
+        <p class="small mb-2"><strong>Step:</strong> ${displaySequence}</p>
+        <p class="small mb-2"><strong>Player:</strong> ${action.player_name || 'Unknown'}</p>
+        <p class="small mb-2"><strong>Faction:</strong> ${action.faction || 'Unknown'}</p>
+        <p class="small mb-2"><strong>Time:</strong> ${timestamp.toLocaleTimeString()}</p>
+        <p class="small mb-2"><strong>Duration:</strong> ${duration}</p>
+        <p class="small mb-0"><strong>Span Links:</strong> ${action.span_links ? action.span_links.length : 0}</p>
+    `;
+}
+
+function clearCurrentActionDetails() {
+    document.getElementById('current-action-details').innerHTML = '<p class="text-muted">Click play to start replay</p>';
+}
+
+function updateSpanAttributes(action) {
+    const attributesDiv = document.getElementById('span-attributes');
+    
+    if (!action.attributes || Object.keys(action.attributes).length === 0) {
+        attributesDiv.innerHTML = '<p class="small text-muted">No attributes available</p>';
+        return;
+    }
+    
+    let html = '';
+    Object.entries(action.attributes).forEach(([key, value]) => {
+        html += `<div class="attribute-item">
+            <strong class="small">${key}</strong><br>
+            <code class="small">${value}</code>
+        </div>`;
+    });
+    
+    attributesDiv.innerHTML = html;
+}
+
+function updateProgress() {
+    const totalSteps = sessionData.actions.length;
+    const progress = totalSteps > 0 ? (currentStep / totalSteps) * 100 : 0;
+    
+    document.getElementById('replay-progress').style.width = `${progress}%`;
+    document.getElementById('current-step').textContent = Math.max(0, currentStep);
+    
+    // Ensure total steps is also displayed correctly
+    const totalStepsElement = document.getElementById('total-steps');
+    if (totalStepsElement) {
+        totalStepsElement.textContent = totalSteps;
+    }
+}
+
+function showError(message) {
+    document.getElementById('error-message').style.display = 'block';
+    document.getElementById('error-text').textContent = message;
+}
+</script>
+{% endblock %} 

@@ -1,0 +1,51 @@
+// ---------------------------------------------------------
+// 1. Syslog Receiver (Logs)
+// ---------------------------------------------------------
+
+// Listen for syslog messages on port 1514
+loki.source.syslog "mikrotik_syslog" {
+    listener {
+        address  = "0.0.0.0:1514"
+        protocol = "udp" // MikroTik usually sends via UDP
+        labels   = { component = "mikrotik_syslog" }
+    }
+    forward_to = [loki.process.mikrotik_logs.receiver]
+}
+
+// Process logs to add labels based on source IP or content
+loki.process "mikrotik_logs" {
+    stage.static_labels {
+        values = {
+            job = "mikrotik",
+            vendor = "mikrotik",
+        }
+    }
+    // Forward to the Loki writer defined in common-outputs.alloy
+    forward_to = [loki.write.default.receiver]
+}
+
+// ---------------------------------------------------------
+// 2. SNMP Scraper (Metrics)
+// ---------------------------------------------------------
+
+// Configure the SNMP exporter integration
+prometheus.exporter.snmp "mikrotik_snmp" {
+    config_file = "/etc/alloy/snmp.yml"
+    
+    // Define targets to scrape
+    target "router_main" {
+        address = "192.168.88.1" // IP of your MikroTik
+        module  = "mikrotik"     // Module name defined in snmp.yml
+        auth    = "public_v2"    // Auth name defined in snmp.yml (usually community string)
+    }
+}
+
+// Scrape the metrics exposed by the component above
+prometheus.scrape "mikrotik_scraper" {
+    targets    = prometheus.exporter.snmp.mikrotik_snmp.targets
+    scrape_interval = "60s" // Don't scrape SNMP too frequently (high CPU load on router)
+    
+    // Forward to the Prometheus writer defined in common-outputs.alloy
+    forward_to = [prometheus.remote_write.default.receiver]
+}
+

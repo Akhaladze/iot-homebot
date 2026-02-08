@@ -1,0 +1,24 @@
+# ingress-homebot.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: homebot-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  tls:
+  - hosts:
+    - api.cloudpak.info
+    secretName: api-cloudpak-tls
+  rules:
+  - host: api.cloudpak.info
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: homebot-external-svc
+            port:
+              number: 443

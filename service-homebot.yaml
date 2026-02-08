@@ -1,0 +1,22 @@
+# service-homebot.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: homebot-external-svc
+spec:
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 10.10.100.20:5000 # Порт вашего Flask приложения
+
+---
+
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: homebot-external-svc # Имя должно совпадать с именем Service
+subsets:
+  - addresses:
+      - ip: 10.10.100.20 # IP вашего NUC (Worker)
+    ports:
+      - port: 5000
