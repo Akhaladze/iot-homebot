@@ -14,7 +14,7 @@ jobs:
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: akhaladze
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push Docker image
@@ -22,4 +22,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: akhaladze/iot-homebot:latest
+          tags: akhaladze/iot-flask:latest
