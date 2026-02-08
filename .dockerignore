@@ -13,3 +13,11 @@ Dockerfile
 README.md
 data/
 network.db
+.git
+.venv
+__pycache__
+*.db
+*.parquet
+*.log
+data/
+cert/
