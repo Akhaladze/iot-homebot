@@ -4,8 +4,8 @@ import requests
 import pandas as pd
 import duckdb
 import urllib3
-from flask import request
-from flask import Flask, jsonify
+from flask import request, Flask, jsonify
+from werkzeug.middleware.proxy_fix import ProxyFix
 from datetime import datetime
 from services.mikrotik import MikroTikService
 from homebot.services.telegrambot import tg_service
