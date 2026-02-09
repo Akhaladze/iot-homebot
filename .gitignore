@@ -12,3 +12,5 @@ network.db
 .envGeoLite2-City.mmdb
 homebot/services/__pycache__/
 network.db
+.env
+cert/
