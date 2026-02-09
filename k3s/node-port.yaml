@@ -1,0 +1,118 @@
+# -------------------
+# 1. Namespace
+# -------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: homebot
+
+---
+# -------------------
+# 2. Persistent Volume Claim (PVC)
+# -------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: homebot-pvc
+  namespace: homebot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 25Gi
+
+---
+# -------------------
+# 3. Deployment
+# -------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-homebot
+  namespace: homebot
+  labels:
+    app: iot-homebot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iot-homebot
+  template:
+    metadata:
+      labels:
+        app: iot-homebot
+    spec:
+      containers:
+        - name: iot-homebot
+          image: akhaladze/iot-homebot:latest 
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 5000
+              protocol: TCP
+          env:
+            - name: FLASK_ENV
+              value: "production"
+          volumeMounts:
+            - mountPath: /app/data
+              name: data-volume
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: homebot-pvc
+      nodeSelector:
+        kubernetes.io/hostname: gluck2
+
+---
+# -------------------
+# 4. Service (NodePort)
+# -------------------
+apiVersion: v1
+kind: Service
+metadata:
+  name: iot-homebot-service
+  namespace: homebot
+  labels:
+    app: iot-homebot
+spec:
+  # Используем NodePort вместо LoadBalancer
+  type: NodePort
+  selector:
+    app: iot-homebot
+  ports:
+    - name: http-api
+      protocol: TCP
+      port: 5000       # Внутренний порт сервиса (для Ingress)
+      targetPort: 5000 # Порт контейнера
+      nodePort: 30050  # <-- Фиксированный порт для доступа по IP (http://node-ip:30050)
+
+---
+# -------------------
+# 5. Ingress (External & SSL)
+# -------------------
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: iot-homebot-ingress
+  namespace: homebot
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - api.cloudpak.info
+      secretName: api-cloudpak-info-tls
+  rules:
+    - host: api.cloudpak.info
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: iot-homebot-service
+                port:
+                  name: http-api

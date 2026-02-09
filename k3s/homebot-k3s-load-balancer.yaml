@@ -1,0 +1,129 @@
+# -------------------
+# 1. Namespace
+# -------------------
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: homebot
+
+---
+# -------------------
+# 2. Persistent Volume Claim (PVC)
+# -------------------
+# This ensures data persists even if the pod restarts.
+# K3s uses the "local-path" provisioner by default.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: homebot-pvc
+  namespace: homebot
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 25Gi
+  # storageClassName: local-path # K3s default, uncomment if needed explicitly
+
+---
+# -------------------
+# 3. Deployment
+# -------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iot-homebot
+  namespace: homebot
+  labels:
+    app: iot-homebot
+spec:
+  # IMPORTANT: DuckDB usually requires a single writer lock. 
+  # Keep replicas at 1 to avoid database locking issues.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: iot-homebot
+  template:
+    metadata:
+      labels:
+        app: iot-homebot
+    spec:
+      containers:
+        - name: iot-homebot
+          image: akhaladze/iot-homebot:latest 
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 5000
+              protocol: TCP
+          env:
+            - name: FLASK_ENV
+              value: "production"
+            # Add other ENV variables here (e.g., TELEGRAM_TOKEN, DATABASE_URL)
+          volumeMounts:
+            - mountPath: /app/data
+              name: data-volume
+      volumes:
+        - name: data-volume
+          persistentVolumeClaim:
+            claimName: homebot-pvc
+      nodeSelector:
+        kubernetes.io/hostname: gluck2
+
+---
+# -------------------
+# 4. Service (Internal & LoadBalancer)
+# -------------------
+# This exposes the app on the LAN via the Node's IP address (e.g., 10.10.100.20:5000)
+# K3s ServiceLB will bind port 5000 on all node IPs.
+apiVersion: v1
+kind: Service
+metadata:
+  name: iot-homebot-service
+  namespace: homebot
+  labels:
+    app: iot-homebot
+spec:
+  type: LoadBalancer
+  selector:
+    app: iot-homebot
+  ports:
+    - name: http-api
+      protocol: TCP
+      port: 5000
+      targetPort: 5000
+
+
+---
+# -------------------
+# 5. Ingress (External & SSL)
+# -------------------
+# Handles routing for api.cloudpak.info with auto-SSL via Cert-Manager
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: iot-homebot-ingress
+  namespace: homebot
+  annotations:
+    # Cert-Manager issuer (ensure this matches your ClusterIssuer name)
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    # Redirect HTTP traffic to HTTPS
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - api.cloudpak.info
+      secretName: api-cloudpak-info-tls
+  rules:
+    - host: api.cloudpak.info
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: iot-homebot-service
+                port:
+                  name: http-api
+

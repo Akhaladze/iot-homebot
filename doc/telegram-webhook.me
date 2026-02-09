@@ -1,0 +1,22 @@
+
+# setWebhook
+curl -F "url=https://api.cloudpak.info/webhook" https://api.telegram.org/bot<TOKEN>/setWebhook
+
+# Response example {"ok":true,"result":true,"description":"Webhook is already set"}(venv) gnet@nuc:~/iot$ 
+
+
+# getWebhookInfo
+curl https://api.telegram.org/bot<TOKEN>/getWebhookInfo
+
+# Response 
+{"ok":true,"result":{"url":"https://api.cloudpak.info/webhook","has_custom_certificate":false,"pending_update_count":0,"max_connections":40,"ip_address":"146.0.80.189"}}(venv) gnet@nuc:~/iot$ 
+
+
+# deleteWebhook
+curl -X DELETE https://api.telegram.org/bot<TOKEN>/deleteWebhook
+
+
+# Create secret
+kubectl create secret generic telegram-secret \
+  --from-literal=TELEGRAM_TOKEN='<TOKEN>' \
+  --namespace=homebot
