@@ -11,3 +11,4 @@ python-dotenv
 telebot
 pyTelegramBotAPI
 python-dotenv
+werkzeug.middleware.proxy_fix
