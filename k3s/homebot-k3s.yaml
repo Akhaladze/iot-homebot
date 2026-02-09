@@ -23,6 +23,8 @@ spec:
       labels:
         app: homebot
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: gluck2 # nuc
       containers:
       - name: homebot
         image: akhaladze/iot-homebot:latest
