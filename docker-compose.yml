@@ -5,6 +5,7 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
+    image: akhaladze/iot-homebot:latest
     volumes:
       - ./data:/app/data
       - ./homebot:/app/homebot

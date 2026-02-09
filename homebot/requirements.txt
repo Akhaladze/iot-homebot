@@ -8,7 +8,5 @@ pyarrow
 dbt-duckdb
 geoip2
 python-dotenv
-telebot
 pyTelegramBotAPI
-python-dotenv
-werkzeug.middleware.proxy_fix
+gunicorn
